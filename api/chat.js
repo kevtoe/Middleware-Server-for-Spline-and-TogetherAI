@@ -1,8 +1,6 @@
 import axios from 'axios';
 
 export default async function handler(req, res) {
-  console.log('Request received:', req.method);
-  
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,9 +8,14 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'POST') {
       const { userPrompt } = req.body;
-      console.log('Processing prompt:', userPrompt);
-
+      
+      // Verify API key
       const API_KEY = process.env.TOGETHER_API_KEY;
+      if (!API_KEY) {
+        throw new Error('API key is not configured');
+      }
+
+      // Log the request configuration
       const payload = {
         model: 'togethercomputer/llama-2-70b-chat',
         messages: [
@@ -25,44 +28,53 @@ export default async function handler(req, res) {
         max_tokens: 512
       };
 
-      console.log('Making API request to Together AI');
-      const response = await axios.post('https://api.together.xyz/v1/chat/completions', 
-        payload,
-        {
+      // Try the API request in a separate try-catch
+      try {
+        const response = await axios({
+          method: 'post',
+          url: 'https://api.together.xyz/v1/chat/completions',
           headers: {
             'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
-          }
-        }
-      );
+          },
+          data: payload,
+          timeout: 30000 // 30 second timeout
+        });
 
-      console.log('API response received');
-      return res.status(200).json(response.data);
+        return res.status(200).json(response.data);
+      } catch (apiError) {
+        // Specific error handling for API calls
+        return res.status(500).json({
+          error: 'API request failed',
+          details: {
+            message: apiError.message,
+            status: apiError.response?.status,
+            data: apiError.response?.data,
+            code: apiError.code
+          }
+        });
+      }
     }
 
-    // For GET requests
+    // Handle GET requests
     if (req.method === 'GET') {
       return res.status(200).json({ 
-        message: 'Chat endpoint is working. Please use POST method.'
+        message: 'Chat endpoint is working. Please use POST method.',
+        env: {
+          hasApiKey: !!process.env.TOGETHER_API_KEY
+        }
       });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Error details:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
-    });
-    
+    // General error handling
     return res.status(500).json({
-      error: 'API request failed',
-      details: {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data
-      }
+      error: 'Server error',
+      type: error.name,
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
