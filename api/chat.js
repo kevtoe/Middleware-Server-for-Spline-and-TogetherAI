@@ -1,57 +1,67 @@
+import axios from 'axios';
+
 export default async function handler(req, res) {
-  console.log('1. Request received:', req.method);
+  console.log('Request received:', req.method);
   
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   
   try {
-    // For GET requests, return a simple message
-    if (req.method === 'GET') {
-      console.log('2. GET request detected');
-      return res.status(200).json({ 
-        message: 'Chat endpoint is working. Please use POST method.',
-        env: {
-          hasApiKey: !!process.env.TOGETHER_API_KEY,
-          nodeEnv: process.env.NODE_ENV
-        }
-      });
-    }
-
-    // For POST requests
     if (req.method === 'POST') {
-      console.log('3. POST request detected');
       const { userPrompt } = req.body;
-      
-      return res.status(200).json({ 
-        message: 'POST received',
-        promptReceived: userPrompt,
-        env: {
-          hasApiKey: !!process.env.TOGETHER_API_KEY,
-          nodeEnv: process.env.NODE_ENV
+      console.log('Processing prompt:', userPrompt);
+
+      const API_KEY = process.env.TOGETHER_API_KEY;
+      const payload = {
+        model: 'togethercomputer/llama-2-70b-chat',
+        messages: [
+          {
+            role: 'user',
+            content: userPrompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 512
+      };
+
+      console.log('Making API request to Together AI');
+      const response = await axios.post('https://api.together.xyz/v1/chat/completions', 
+        payload,
+        {
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`,
+            'Content-Type': 'application/json'
+          }
         }
+      );
+
+      console.log('API response received');
+      return res.status(200).json(response.data);
+    }
+
+    // For GET requests
+    if (req.method === 'GET') {
+      return res.status(200).json({ 
+        message: 'Chat endpoint is working. Please use POST method.'
       });
     }
 
-    // If neither GET nor POST
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('Error occurred:', {
+    console.error('Error details:', {
       message: error.message,
-      stack: error.stack,
-      name: error.name
+      response: error.response?.data,
+      status: error.response?.status
     });
     
     return res.status(500).json({
-      error: 'Server error',
+      error: 'API request failed',
       details: {
         message: error.message,
-        type: error.name,
-        env: {
-          hasApiKey: !!process.env.TOGETHER_API_KEY,
-          nodeEnv: process.env.NODE_ENV
-        }
+        status: error.response?.status,
+        data: error.response?.data
       }
     });
   }
