@@ -5,14 +5,12 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, POST');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.setHeader('Access-Control-Max-Age', '86400');
 
-  // Handle OPTIONS request (CORS preflight)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Handle POST request
   if (req.method === 'POST') {
     try {
       const { userPrompt } = req.body;
@@ -35,24 +33,13 @@ export default async function handler(req, res) {
         top_k: 50,
         repetition_penalty: 1,
         stop: ["<|eot_id|>","<|eom_id|>"],
-        stream: true
+        stream: false
       });
 
-      // Handle streaming response
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
+      // Return a clean JSON response
+      return res.status(200).json({
+        content: response.choices[0].message.content
       });
-
-      for await (const token of response) {
-        const content = token.choices[0]?.delta?.content;
-        if (content) {
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
-        }
-      }
-
-      res.end();
 
     } catch (error) {
       console.error('Error:', error);
@@ -61,7 +48,7 @@ export default async function handler(req, res) {
         details: error.message
       });
     }
-  } else {
-    return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }
